@@ -30,15 +30,22 @@ namespace HangfireDemo
         {
             // Add Hangfire services.
             services.AddHangfire(configuration => configuration
+                //設置新的數據兼容性級別和類型序列化程序，以便為後台作業提供更緊湊的有效負載
                 .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
                 .UseSimpleAssemblyNameTypeSerializer()
+                //set the recommended JSON options
                 .UseRecommendedSerializerSettings()
                 .UseSqlServerStorage(Configuration.GetConnectionString("HangfireConnection"), new SqlServerStorageOptions
                 {
+                    //命令批處理最大超時
                     CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                    //滑動隱形超時
                     SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                    //隊列輪詢間隔
                     QueuePollInterval = TimeSpan.Zero,
+                    //使用推薦的隔離級別
                     UseRecommendedIsolationLevel = true,
+                    //禁用全局鎖
                     DisableGlobalLocks = true
                 }));
 
