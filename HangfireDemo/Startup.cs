@@ -28,6 +28,8 @@ namespace HangfireDemo
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddSingleton<IService, Service>();
+
             // Add Hangfire services.
             services.AddHangfire(configuration => configuration
                 //設置新的數據兼容性級別和類型序列化程序，以便為後台作業提供更緊湊的有效負載
@@ -38,9 +40,9 @@ namespace HangfireDemo
                 .UseSqlServerStorage(Configuration.GetConnectionString("HangfireConnection"), new SqlServerStorageOptions
                 {
                     //命令批處理最大超時
-                    CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                    CommandBatchMaxTimeout = TimeSpan.FromMinutes(3),
                     //滑動隱形超時
-                    SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                    SlidingInvisibilityTimeout = TimeSpan.FromMinutes(2),
                     //隊列輪詢間隔
                     QueuePollInterval = TimeSpan.Zero,
                     //使用推薦的隔離級別
@@ -60,9 +62,13 @@ namespace HangfireDemo
             .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.FailedCount) //失敗數量
             .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.DeletedCount) //刪除數量
             .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.AwaitingCount) //等待任務數量
+            //.UseNLogLogProvider()
                 );
            
-            services.AddHangfireServer();
+            services.AddHangfireServer(x=>new BackgroundJobServerOptions()
+            {
+                ServerTimeout = TimeSpan.FromMinutes(1)
+            });
 
             services.AddControllers();
             services.AddSwaggerGen(c =>
@@ -76,6 +82,8 @@ namespace HangfireDemo
         public void Configure(IApplicationBuilder app,
             IBackgroundJobClient backgroundJobs,
             IRecurringJobManager recurringJobManager,
+            IService serive,
+
             IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
@@ -84,6 +92,7 @@ namespace HangfireDemo
                 app.UseSwagger();
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "HangfireDemo v1"));
             }
+           
             app.UseHttpsRedirection();
 
             app.UseRouting();
@@ -97,15 +106,24 @@ namespace HangfireDemo
 
             app.UseHangfireDashboard();
             //Fire-and-forget tasks又稱射後不理任務
-            var jobId1 =  backgroundJobs.Enqueue(() => Console.WriteLine($"Hangfire Start!：{DateTime.Now}"));
+            var jobId1 =  backgroundJobs.Enqueue(() => serive.Log($"Hangfire Start!"));
             //延遲執行
-            var jobId2 = backgroundJobs.Schedule(() => Console.WriteLine($"Delayed!：{DateTime.Now}"), TimeSpan.FromMinutes(2));
+            var jobId2 = backgroundJobs.Schedule(() => serive.Log($"Delayed!{DateTime.Now} | "), TimeSpan.FromMinutes(1));
             //Cron Expressions
             //https://docs.oracle.com/cd/E12058_01/doc/doc.1014/e12030/cron_expressions.htm
-            //every 3 minutes
-            //*/3 * * * *
-            //
-            recurringJobManager.AddOrUpdate(DateTime.Now.Ticks.ToString(), () => Console.WriteLine($"RecurringJob!：{DateTime.Now}"), "*/3 * * * *");
+            //*/2 every 2 minutes
+            //*表示0
+            //不是程式執行起算的每兩分鐘 而是真實時間的兩分鐘
+            //例如程式是10點01分執行 這樣02分就會跑一次然後04,06會執行這樣
+
+            //25/3 * ? * *
+            //到25分後每三分鐘跑一次 25，28，31
+            //https://www.freeformatter.com/cron-expression-generator-quartz.html#
+            //6月5號4點23分1秒
+            //1 23 4 5 JUN ?
+            //每月的週日 4點23分1秒
+            //1 23 4 ? * SUN
+            recurringJobManager.AddOrUpdate("Some-GUID", () => serive.Log($"RecurringJob!：{DateTime.Now}"), "1 23 4 ? * SUN");
         }
     }
 }
