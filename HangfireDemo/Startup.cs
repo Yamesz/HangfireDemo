@@ -47,8 +47,21 @@ namespace HangfireDemo
                     UseRecommendedIsolationLevel = true,
                     //禁用全局鎖
                     DisableGlobalLocks = true
-                }));
-
+                })
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.ServerCount) //服務器數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.RecurringJobCount) //任務數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.RetriesCount) //重試次數
+            //.UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.EnqueuedCountOrNull)//隊列數量
+            //.UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.FailedCountOrNull)//失敗數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.EnqueuedAndQueueCount) //隊列數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.ScheduledCount) //計劃任務數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.ProcessingCount) //執行中的任務數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.SucceededCount) //成功作業數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.FailedCount) //失敗數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.DeletedCount) //刪除數量
+            .UseDashboardMetric(Hangfire.Dashboard.DashboardMetrics.AwaitingCount) //等待任務數量
+                );
+           
             services.AddHangfireServer();
 
             services.AddControllers();
@@ -56,12 +69,13 @@ namespace HangfireDemo
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "HangfireDemo", Version = "v1" });
             });
-            
+
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, 
-            IBackgroundJobClient backgroundJobs, 
+        public void Configure(IApplicationBuilder app,
+            IBackgroundJobClient backgroundJobs,
+            IRecurringJobManager recurringJobManager,
             IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
@@ -70,7 +84,6 @@ namespace HangfireDemo
                 app.UseSwagger();
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "HangfireDemo v1"));
             }
-
             app.UseHttpsRedirection();
 
             app.UseRouting();
@@ -83,7 +96,16 @@ namespace HangfireDemo
             });
 
             app.UseHangfireDashboard();
-            backgroundJobs.Enqueue(() => Console.WriteLine("Hello world from Hangfire!"));
+            //Fire-and-forget tasks又稱射後不理任務
+            var jobId1 =  backgroundJobs.Enqueue(() => Console.WriteLine($"Hangfire Start!：{DateTime.Now}"));
+            //延遲執行
+            var jobId2 = backgroundJobs.Schedule(() => Console.WriteLine($"Delayed!：{DateTime.Now}"), TimeSpan.FromMinutes(2));
+            //Cron Expressions
+            //https://docs.oracle.com/cd/E12058_01/doc/doc.1014/e12030/cron_expressions.htm
+            //every 3 minutes
+            //*/3 * * * *
+            //
+            recurringJobManager.AddOrUpdate(DateTime.Now.Ticks.ToString(), () => Console.WriteLine($"RecurringJob!：{DateTime.Now}"), "*/3 * * * *");
         }
     }
 }
